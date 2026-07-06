@@ -342,7 +342,7 @@
                 const screenHandX = cw - handX;
                 const screenHandY = handY; 
 
-                // --- Header (ปรับขนาดและตำแหน่ง) ---
+                // --- Header ---
                 canvasCtx.shadowBlur = 10;
                 canvasCtx.shadowColor = '#0ff';
                 canvasCtx.fillStyle = '#0ff';
@@ -356,7 +356,6 @@
                     canvasCtx.fillStyle = '#f0f'; 
                     canvasCtx.shadowColor = '#f0f';
                 }
-                // ขยับเวลาลงมาต่ำกว่าโจทย์ เพื่อให้โจทย์มีพื้นที่แสดงเต็มที่
                 canvasCtx.fillText(`TIME: ${formatTime(timeLeft)}`, cw / 2, ch / 2 + 30);
 
                 // --- Question (ขนาดมหึมา 280px) ---
@@ -365,15 +364,12 @@
                 canvasCtx.font = 'bold 280px Orbitron';
                 canvasCtx.shadowColor = '#0ff';
                 canvasCtx.textBaseline = 'middle';
-                // ดันโจทย์ขึ้นไปอยู่ช่วงครึ่งบนของจอ
                 canvasCtx.fillText(questions[currentQuestion].q, cw / 2, ch * 0.28); 
 
-                // --- Answer Boxes (กล่องใหญ่ขึ้นและตัวเลข 320px) ---
-                // ขยายกล่องให้กว้างขึ้น เพื่อรองรับตัวเลขขนาดใหญ่มากๆ
+                // --- Answer Boxes (ขนาดมหึมา) ---
                 const boxW = cw * 0.38; 
-                const boxH = ch * 0.35; // ความสูงกล่องประมาณ 1/3 ของจอ
+                const boxH = ch * 0.35; 
                 const gap = cw * 0.08;
-                // ดันกล่องลงมาด้านล่างสุดเว้นขอบนิดหน่อย
                 const boxY = ch - boxH - 40; 
                 
                 boxes = [
@@ -432,7 +428,6 @@
                     canvasCtx.font = 'bold 320px Kanit';
                     canvasCtx.textAlign = 'center';
                     canvasCtx.textBaseline = 'middle';
-                    // ขยับ Y เล็กน้อยให้ตัวเลขอยู่กึ่งกลางกล่องพอดี
                     canvasCtx.fillText(box.ans, box.x + box.w/2, box.y + box.h/2 + 20); 
                 });
 
@@ -449,7 +444,6 @@
                         canvasCtx.fillStyle = '#f0f';
                         canvasCtx.shadowBlur = 10;
                         canvasCtx.shadowColor = '#f0f';
-                        // ขยายแถบโหลดให้หนาขึ้นเป็น 20px
                         canvasCtx.fillRect(box.x, box.y + box.h - 20, box.w * progress, 20); 
 
                         if (progress >= 1) {
