@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Math AR Game - ม.1 Cyberpunk Edition</title>
+    
+    <!-- Tailwind CSS for UI Layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Kanit (Thai) & Orbitron (Cyberpunk Sci-Fi) -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    
+    <!-- MediaPipe Hands (Legacy CDN is highly stable for pure HTML files) -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    
+    <!-- Tone.js for Sound Effects -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+            background-color: #030308; /* Deep Space Dark */
+            margin: 0;
+            padding: 0;
+            overflow: hidden; 
+        }
+        
+        /* Cyberpunk Glow and Glitch Aesthetics */
+        .neon-text-cyan {
+            text-shadow: 0 0 5px #00f3ff, 0 0 15px #00f3ff, 0 0 30px #00f3ff;
+        }
+        .neon-text-magenta {
+            text-shadow: 0 0 5px #ff00ff, 0 0 15px #ff00ff, 0 0 30px #ff00ff;
+        }
+        .neon-border-cyan {
+            box-shadow: 0 0 15px rgba(0, 243, 255, 0.5), inset 0 0 15px rgba(0, 243, 255, 0.3);
+            border: 2px solid #00f3ff;
+        }
+        .neon-border-magenta {
+            box-shadow: 0 0 15px rgba(255, 0, 255, 0.5), inset 0 0 15px rgba(255, 0, 255, 0.3);
+            border: 2px solid #ff00ff;
+        }
+        .btn-cyberpunk {
+            clip-path: polygon(12% 0, 100% 0, 100% 75%, 88% 100%, 0 100%, 0 25%);
+            background: linear-gradient(45deg, transparent 5%, #ff00ff 5%);
+            box-shadow: 5px 5px 0px #00f3ff;
+            text-shadow: 0 0 5px #fff;
+        }
+        .btn-cyberpunk:hover {
+            background: linear-gradient(45deg, transparent 5%, #00f3ff 5%);
+            box-shadow: 5px 5px 0px #ff00ff;
+        }
+
+        /* Loading Spinner */
+        .cyber-loader {
+            border: 4px solid rgba(0, 243, 255, 0.1);
+            border-top: 4px solid #00f3ff;
+            border-bottom: 4px solid #ff00ff;
+            border-radius: 50%;
+            width: 70px;
+            height: 70px;
+            animation: cyber-spin 1.5s linear infinite;
+        }
+        @keyframes cyber-spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex items-center justify-center p-4">
+
+    <!-- Game Container: Fixed Aspect-Ratio 16:9 for perfect scaling inside any monitor/projector -->
+    <div class="relative w-full max-w-[1280px] aspect-video bg-gray-950 rounded-3xl shadow-[0_0_80px_rgba(0,243,255,0.2)] overflow-hidden border-4 border-cyan-500/30">
+        
+        <!-- Video Feed (Hidden from screen, processed and mirrored on canvas directly) -->
+        <video id="input_video" class="hidden" autoplay playsinline></video>
+        
+        <!-- Main Game Interactive Canvas -->
+        <canvas id="output_canvas" class="w-full h-full object-cover"></canvas>
+        
+        <!-- 1. AI Loading Screen -->
+        <div id="loading_screen" class="absolute inset-0 flex flex-col items-center justify-center bg-black z-50 text-white transition-opacity duration-500">
+            <div class="cyber-loader mb-6"></div>
+            <h2 class="text-4xl font-bold tracking-widest font-['Orbitron'] text-cyan-400 neon-text-cyan">CONNECTING NEURAL NETWORK...</h2>
+            <p class="text-lg mt-4 text-gray-400 tracking-wide">กรุณาอนุญาตให้ระบบเข้าถึงกล้องเว็บแคมของคุณ (Allow Camera)</p>
+            <p id="error_msg" class="text-red-400 mt-4 text-lg hidden"></p>
+        </div>
+
+        <!-- 2. Cyberpunk Mission Start Screen -->
+        <div id="start_screen" class="absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-40 text-white hidden backdrop-blur-md transition-opacity duration-500">
+            <h1 class="text-7xl font-black mb-2 text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-pink-500 to-purple-600 drop-shadow-[0_0_20px_rgba(0,243,255,0.7)] text-center font-['Orbitron'] uppercase tracking-widest">
+                CYBERMATH AR
+            </h1>
+            <h2 class="text-3xl font-bold mb-10 text-cyan-400 tracking-wide font-['Orbitron'] text-center">
+                MISSION : การบวกและลบจำนวนเต็ม (20 ข้อ)
+            </h2>
+            
+            <div class="bg-black/80 p-8 rounded-2xl border border-cyan-500/40 mb-10 max-w-2xl text-center shadow-[0_0_30px_rgba(0,243,255,0.1)]">
+                <p class="text-2xl mb-4 leading-relaxed text-gray-300">
+                    🖐️ <span class="text-pink-500 font-bold">วิธีเล่น:</span> ถอยห่างจากกล้อง ยกมือข้างที่ถนัดขึ้น<br>
+                    แล้วใช้ <span class="text-cyan-400 font-semibold">นิ้วชี้</span> บังคับเป้าชี้ไปที่กล่องคำตอบที่ต้องการ
+                </p>
+                <div class="flex items-center justify-center gap-6 text-xl text-pink-400 font-['Orbitron'] border-t border-cyan-500/20 pt-4 mt-4">
+                    <span>⏱️ ค้างไว้ 0.3 วินาที เพื่อตอบ</span>
+                    <span>⚡ เวลาคิดข้อละ 2 นาที</span>
+                </div>
+            </div>
+
+            <button id="start_btn" class="btn-cyberpunk px-14 py-5 text-3xl font-black font-['Orbitron'] text-black tracking-widest transition-all duration-300 cursor-pointer">
+                LAUNCH SYSTEM
+            </button>
+        </div>
+
+        <!-- 3. Post-Mission Results Screen -->
+        <div id="end_screen" class="absolute inset-0 flex flex-col items-center justify-center bg-black/95 z-40 text-white hidden backdrop-blur-lg transition-opacity duration-500">
+            <h1 class="text-6xl font-extrabold mb-6 text-cyan-400 font-['Orbitron'] uppercase neon-text-cyan tracking-wider">MISSION EVALUATION</h1>
+            
+            <div class="text-[10rem] font-black leading-none text-transparent bg-clip-text bg-gradient-to-b from-pink-400 to-purple-600 drop-shadow-[0_0_30px_rgba(255,0,255,0.8)] font-['Orbitron']" id="final_score">
+                0/20
+            </div>
+            
+            <p class="text-4xl mb-12 font-bold text-cyan-300 tracking-wider" id="final_message">SYSTEM REBOOT REQUIRED</p>
+            
+            <button id="restart_btn" class="btn-cyberpunk px-14 py-5 text-3xl font-black font-['Orbitron'] text-black tracking-widest transition-all duration-300 cursor-pointer" style="background: linear-gradient(45deg, transparent 5%, #00f3ff 5%); box-shadow: 5px 5px 0px #ff00ff;">
+                REBOOT COGNITIVE
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- 20 Simple Integer Addition/Subtraction Questions ---
+        const questions = [
+            { q: "(-5) + 8", a: 3, choices: [3, -13] },
+            { q: "7 + (-12)", a: -5, choices: [-5, 5] },
+            { q: "(-4) + (-6)", a: -10, choices: [-10, -2] },
+            { q: "0 + (-9)", a: -9, choices: [-9, 9] },
+            { q: "15 - 20", a: -5, choices: [-5, 35] },
+            { q: "(-3) - 7", a: -10, choices: [-10, 4] },
+            { q: "10 - (-5)", a: 15, choices: [15, 5] },
+            { q: "(-8) - (-3)", a: -5, choices: [-5, -11] },
+            { q: "(-6) + 6", a: 0, choices: [0, -12] },
+            { q: "4 - 9 + (-2)", a: -7, choices: [-7, -3] },
+            { q: "3 + (-5)", a: -2, choices: [-2, 8] },
+            { q: "(-2) - 3", a: -5, choices: [-5, 1] },
+            { q: "6 - (-2)", a: 8, choices: [8, 4] },
+            { q: "(-9) + 4", a: -5, choices: [-5, -13] },
+            { q: "12 + (-15)", a: -3, choices: [-3, 27] },
+            { q: "(-1) - (-8)", a: 7, choices: [7, -9] },
+            { q: "0 - (-4)", a: 4, choices: [4, -4] },
+            { q: "(-10) + (-5)", a: -15, choices: [-15, -5] },
+            { q: "5 - 12", a: -7, choices: [-7, 7] },
+            { q: "(-8) + 8", a: 0, choices: [0, -16] }
+        ];
+
+        // --- DOM Elements Binding ---
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        
+        const loadingScreen = document.getElementById('loading_screen');
+        const startScreen = document.getElementById('start_screen');
+        const endScreen = document.getElementById('end_screen');
+        
+        // --- Static 16:9 Virtual Resolution ---
+        canvasElement.width = 1280;
+        canvasElement.height = 720;
+
+        // --- Game Logic State Machine ---
+        let gameState = 'LOADING'; // LOADING, START, PLAYING, REVEAL, END
+        let isReady = false;
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let currentBoxes = [];
+
+        // --- Pointer & Hysteresis Controls ---
+        let pointerX = -1, pointerY = -1;
+        let smoothX = -1, smoothY = -1;
+        let hoverLossTime = 0; // Grace period for losing hand tracking briefly
+        let hoveredBox = null;
+        let hoverStartTime = 0;
+        const HOVER_DURATION = 300; // Hover confirmation timer: 0.3 seconds
+
+        // --- Question Time limit system ---
+        let questionStartTime = 0;
+        const TIME_LIMIT_MS = 120000; // 2 minutes (120 seconds) limit per question
+
+        // --- Tone.js Web Audio Synth System ---
+        let synth = null;
+
+        function initAudio() {
+            if (!synth) {
+                synth = new Tone.PolySynth(Tone.Synth).toDestination();
+            }
+            if (Tone.context.state !== 'running') {
+                Tone.start();
+            }
+        }
+
+        function playCorrectSound() {
+            if (synth) {
+                let now = Tone.now();
+                synth.triggerAttackRelease("E5", "16n", now);
+                synth.triggerAttackRelease("B5", "8n", now + 0.08);
+            }
+        }
+
+        function playWrongSound() {
+            if (synth) {
+                let now = Tone.now();
+                synth.triggerAttackRelease("A3", "8n", now);
+                synth.triggerAttackRelease("D3", "4n", now + 0.1);
+            }
+        }
+
+        // --- Loading Level and Randomizing Choices ---
+        function loadQuestion(index) {
+            let q = questions[index];
+            // Randomize position of answers
+            let shuffled = [...q.choices].sort(() => Math.random() - 0.5);
+            
+            // Fixed positions for two options on 1280x720 canvas
+            const positions = [
+                { x: 320, y: 460 },  // Left choice
+                { x: 960, y: 460 }   // Right choice
+            ];
+            
+            currentBoxes = [];
+            for (let i = 0; i < shuffled.length; i++) {
+                currentBoxes.push({
+                    id: i,
+                    x: positions[i].x,
+                    y: positions[i].y,
+                    w: 480, // Large clickable boxes
+                    h: 200,
+                    text: String(shuffled[i]),
+                    status: 'normal' // 'normal', 'correct', 'wrong', 'correct_reveal'
+                });
+            }
+            
+            // Reset Tracking parameters
+            hoveredBox = null;
+            hoverStartTime = 0;
+            smoothX = -1;
+            smoothY = -1;
+            
+            // Reset timing countdown
+            questionStartTime = performance.now();
+        }
+
+        // --- Process Answer Selection ---
+        function submitAnswer(selectedBox) {
+            gameState = 'REVEAL';
+            let q = questions[currentQuestionIndex];
+            
+            let isCorrect = (String(selectedBox.text) === String(q.a));
+            selectedBox.status = isCorrect ? 'correct' : 'wrong';
+            
+            if (isCorrect) {
+                score++;
+                playCorrectSound();
+            } else {
+                playWrongSound();
+                // Reveal the correct option
+                let correctBox = currentBoxes.find(b => String(b.text) === String(q.a));
+                if (correctBox) correctBox.status = 'correct_reveal';
+            }
+            
+            // Display feedback for 2 seconds then continue
+            setTimeout(() => {
+                currentQuestionIndex++;
+                if (currentQuestionIndex >= questions.length) {
+                    showEndScreen();
+                } else {
+                    loadQuestion(currentQuestionIndex);
+                    gameState = 'PLAYING';
+                }
+            }, 2000);
+        }
+
+        // --- Process Timeout (No response in 2 mins) ---
+        function submitTimeout() {
+            gameState = 'REVEAL';
+            playWrongSound();
+            
+            let q = questions[currentQuestionIndex];
+            let correctBox = currentBoxes.find(b => String(b.text) === String(q.a));
+            if (correctBox) correctBox.status = 'correct_reveal';
+            
+            setTimeout(() => {
+                currentQuestionIndex++;
+                if (currentQuestionIndex >= questions.length) {
+                    showEndScreen();
+                } else {
+                    loadQuestion(currentQuestionIndex);
+                    gameState = 'PLAYING';
+                }
+            }, 2500);
+        }
+
+        // --- Build Final Stats Screen ---
+        function showEndScreen() {
+            gameState = 'END';
+            document.getElementById('final_score').innerText = `${score}/20`;
+            const msgEl = document.getElementById('final_message');
+            
+            if (score === 20) {
+                msgEl.innerText = "S RANK - SYSTEM PERFECT! 🏆";
+                msgEl.className = "text-4xl mb-12 text-emerald-400 font-extrabold font-['Orbitron'] neon-text-cyan";
+            } else if (score >= 15) {
+                msgEl.innerText = "A RANK - MISSION CLEAR! 👍";
+                msgEl.className = "text-4xl mb-12 text-cyan-400 font-extrabold font-['Orbitron'] neon-text-cyan";
+            } else {
+                msgEl.innerText = "FAILED - DIAGNOSTICS REQUIRED ⚠";
+                msgEl.className = "text-4xl mb-12 text-pink-500 font-extrabold font-['Orbitron'] neon-text-magenta";
+            }
+            endScreen.classList.remove('hidden');
+        }
+
+        // --- Menu Interaction Bindings ---
+        document.getElementById('start_btn').addEventListener('click', () => {
+            initAudio();
+            startScreen.classList.add('hidden');
+            currentQuestionIndex = 0;
+            score = 0;
+            loadQuestion(currentQuestionIndex);
+            gameState = 'PLAYING';
+        });
+
+        document.getElementById('restart_btn').addEventListener('click', () => {
+            endScreen.classList.add('hidden');
+            currentQuestionIndex = 0;
+            score = 0;
+            loadQuestion(currentQuestionIndex);
+            gameState = 'PLAYING';
+        });
+
+        // --- Rounded Rectangle Shape Drawing ---
+        function drawRoundedRect(ctx, x, y, width, height, radius, fill, stroke) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+            if (fill) ctx.fill();
+            if (stroke) ctx.stroke();
+        }
+
+        // --- Redrawing Main HUD & Gameplay on Active Canvas ---
+        function drawGameplay() {
+            // Semi-transparent overlay to make HUD details easily visible
+            canvasCtx.fillStyle = "rgba(4, 4, 12, 0.72)";
+            canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+
+            let q = questions[currentQuestionIndex];
+            
+            // Cyberpunk HUD Question Container Top Box
+            canvasCtx.save();
+            canvasCtx.shadowColor = "#00f3ff";
+            canvasCtx.shadowBlur = 15;
+            canvasCtx.fillStyle = "rgba(5, 5, 20, 0.9)";
+            canvasCtx.strokeStyle = "#00f3ff";
+            canvasCtx.lineWidth = 3;
+            
+            // Removed the center bounding box to allow MASSIVE text
+            // drawRoundedRect(canvasCtx, 190, 15, 900, 180, 15, true, true);
+            
+            canvasCtx.shadowBlur = 0;
+
+            // Render Center Equation Text (เพิ่มขนาดฟอนต์เป็น 170px ซึ่งใหญ่ที่สุดเท่าที่จอ 1280 จะรับไหวโดยไม่ล้น)
+            canvasCtx.font = "black 170px 'Orbitron', 'Kanit', sans-serif";
+            canvasCtx.fillStyle = "#fff"; 
+            canvasCtx.textAlign = "center";
+            canvasCtx.textBaseline = "middle";
+            // วาดเงาข้อความให้อ่านง่ายขึ้น
+            canvasCtx.shadowColor = "#00f3ff";
+            canvasCtx.shadowBlur = 20;
+            canvasCtx.fillText(q.q + " = ?", canvasElement.width / 2, 160);
+
+            // Time Tracking Engine for 2 Minutes Countdown
+            let timeRemainingSec = 0;
+            let elapsedMs = 0;
+            if (gameState === 'PLAYING') {
+                elapsedMs = performance.now() - questionStartTime;
+                timeRemainingSec = Math.ceil((TIME_LIMIT_MS - elapsedMs) / 1000);
+                if (timeRemainingSec <= 0) {
+                    timeRemainingSec = 0;
+                    submitTimeout();
+                }
+            }
+
+            // Draw Digital Timer Bar & Bar Graphics
+            if (gameState === 'PLAYING' || gameState === 'REVEAL') {
+                let progressRatio = Math.max(0, 1 - (elapsedMs / TIME_LIMIT_MS));
+                
+                // Draw glow timeline bar below equation (ขยับลงมาที่พิกัด Y = 320)
+                canvasCtx.fillStyle = "rgba(255, 0, 255, 0.2)";
+                canvasCtx.fillRect(240, 320, 800, 12);
+                
+                canvasCtx.fillStyle = timeRemainingSec <= 10 ? "#ff0055" : "#00f3ff";
+                canvasCtx.shadowColor = timeRemainingSec <= 10 ? "#ff0055" : "#00f3ff";
+                canvasCtx.shadowBlur = 15;
+                canvasCtx.fillRect(240, 320, 800 * progressRatio, 12);
+                canvasCtx.shadowBlur = 0;
+
+                canvasCtx.font = "bold 30px 'Orbitron', sans-serif";
+                if (gameState === 'REVEAL') {
+                    canvasCtx.fillStyle = "#ff00ff";
+                    canvasCtx.fillText(`EVALUATING SOLUTION...`, canvasElement.width / 2, 290);
+                } else {
+                    canvasCtx.fillStyle = timeRemainingSec <= 10 ? "#ff0055" : "#00f3ff"; 
+                    canvasCtx.fillText(`TIME: ${Math.floor(timeRemainingSec/60)}:${(timeRemainingSec%60).toString().padStart(2, '0')}`, canvasElement.width / 2, 290);
+                }
+            }
+
+            // HUD Panels (Upper Corners)
+            canvasCtx.font = "bold 40px 'Orbitron', 'Kanit', sans-serif";
+            canvasCtx.fillStyle = "#ff00ff";
+            canvasCtx.shadowColor = "#ff00ff";
+            canvasCtx.shadowBlur = 8;
+            
+            canvasCtx.textAlign = "left";
+            canvasCtx.fillText(`Q: ${currentQuestionIndex + 1}/${questions.length}`, 40, 80);
+            
+            canvasCtx.textAlign = "right";
+            canvasCtx.fillText(`SCORE: ${score}`, canvasElement.width - 40, 80);
+            canvasCtx.restore();
+
+            // Render Answer Choice Boxes
+            for (let box of currentBoxes) {
+                drawBox(box);
+            }
+
+            // Render Large feedback overlay upon decision
+            if (gameState === 'REVEAL') {
+                let selectedBox = currentBoxes.find(b => b.status === 'correct' || b.status === 'wrong');
+                canvasCtx.save();
+                canvasCtx.textAlign = "center";
+                canvasCtx.textBaseline = "middle";
+                
+                if (selectedBox && selectedBox.status === 'correct') {
+                    canvasCtx.font = "black 180px 'Orbitron', sans-serif";
+                    canvasCtx.fillStyle = "#00ff66";
+                    canvasCtx.shadowColor = "#00ff66";
+                    canvasCtx.shadowBlur = 50;
+                    canvasCtx.fillText("CORRECT", canvasElement.width/2, 450);
+                } else {
+                    canvasCtx.font = "black 180px 'Orbitron', sans-serif";
+                    canvasCtx.fillStyle = "#ff0055";
+                    canvasCtx.shadowColor = "#ff0055";
+                    canvasCtx.shadowBlur = 50;
+                    canvasCtx.fillText("WRONG", canvasElement.width/2, 450);
+                }
+                canvasCtx.restore();
+            }
+        }
+
+        // --- Drawing Futuristic Cyberpunk Choice Elements ---
+        function drawBox(box) {
+            canvasCtx.save();
+            
+            let bgColor = "rgba(4, 4, 18, 0.9)";
+            let textColor = "#ff00ff"; 
+            let borderColor = "#ff00ff"; 
+            let shadowColor = "#ff00ff";
+            let borderWidth = 5;
+            let scale = 1.0;
+
+            // Hover Scale and Glow State
+            if (box === hoveredBox && gameState === 'PLAYING') {
+                bgColor = "rgba(255, 0, 255, 0.25)";
+                textColor = "#ffffff";
+                borderColor = "#ffffff";
+                shadowColor = "#ffffff";
+                borderWidth = 8;
+                scale = 1.05; 
+            }
+
+            // Correct/Wrong Decision Highlights
+            if (box.status === 'correct' || box.status === 'correct_reveal') {
+                bgColor = "rgba(0, 255, 102, 0.25)";
+                textColor = "#00ff66";
+                borderColor = "#00ff66";
+                shadowColor = "#00ff66";
+                borderWidth = 8;
+            } else if (box.status === 'wrong') {
+                bgColor = "rgba(255, 0, 85, 0.25)";
+                textColor = "#ff0055";
+                borderColor = "#ff0055";
+                shadowColor = "#ff0055";
+                borderWidth = 8;
+            }
+
+            canvasCtx.translate(box.x, box.y + 70); // ขยับกล่องลงมาด้านล่างมากขึ้น
+            canvasCtx.scale(scale, scale);
+            
+            canvasCtx.shadowColor = shadowColor;
+            canvasCtx.shadowBlur = 30;
+
+            // Draw Box Border Design (Hexagon/Diagonal Corner Cyber style)
+            canvasCtx.fillStyle = bgColor;
+            canvasCtx.lineWidth = borderWidth;
+            canvasCtx.strokeStyle = borderColor;
+            
+            // Draw box centering offset - ขยายขนาดกล่องให้ใหญ่ขึ้นรับกับฟอนต์
+            let enlargedWidth = box.w + 60;
+            let enlargedHeight = box.h + 50;
+            drawRoundedRect(canvasCtx, -enlargedWidth/2, -enlargedHeight/2, enlargedWidth, enlargedHeight, 25, true, true);
+
+            // Draw Inner Accent lines
+            canvasCtx.strokeStyle = "rgba(255,255,255,0.15)";
+            canvasCtx.lineWidth = 2;
+            canvasCtx.strokeRect(-enlargedWidth/2 + 15, -enlargedHeight/2 + 15, enlargedWidth - 30, enlargedHeight - 30);
+
+            // Text Rendering Config (เพิ่มขนาดฟอนต์คำตอบเป็น 220px ใหญ่สุดๆ)
+            canvasCtx.font = "black 220px 'Orbitron', 'Kanit', sans-serif";
+            canvasCtx.fillStyle = textColor;
+            canvasCtx.textAlign = "center";
+            canvasCtx.textBaseline = "middle";
+            canvasCtx.shadowBlur = 15;
+            canvasCtx.fillText(box.text, 0, 15); // Adjust Y offset for baseline
+
+            canvasCtx.restore();
+        }
+
+        // --- Check Hand Overlap to Boxes with Built-in Hysteresis ---
+        function checkHover() {
+            let currentHover = null;
+            let margin = 30; // Border tolerance once selected
+            
+            // check current box selection stability
+            if (hoveredBox) {
+                let box = hoveredBox;
+                if (smoothX > box.x - box.w/2 - margin && smoothX < box.x + box.w/2 + margin &&
+                    smoothY > box.y - box.h/2 - margin && smoothY < box.y + box.h/2 + margin) {
+                    currentHover = box;
+                }
+            }
+            
+            // Search other box if none stable
+            if (!currentHover) {
+                for (let box of currentBoxes) {
+                    if (smoothX > box.x - box.w/2 && smoothX < box.x + box.w/2 &&
+                        smoothY > box.y - box.h/2 && smoothY < box.y + box.h/2) {
+                        currentHover = box;
+                        break;
+                    }
+                }
+            }
+
+            // Restart timer on selection swap
+            if (currentHover !== hoveredBox) {
+                hoveredBox = currentHover;
+                hoverStartTime = performance.now();
+            }
+
+            // Validate duration confirmation
+            if (hoveredBox) {
+                let elapsed = performance.now() - hoverStartTime;
+                let progress = Math.min(elapsed / HOVER_DURATION, 1.0);
+                
+                if (progress === 1.0) {
+                    submitAnswer(hoveredBox);
+                    hoveredBox = null; 
+                }
+            }
+        }
+
+        // --- Render Target Pointer on Flipped Coordinates ---
+        function drawPointer() {
+            canvasCtx.save();
+            
+            // Draw neon HUD reticle target design
+            canvasCtx.beginPath();
+            canvasCtx.arc(smoothX, smoothY, 12, 0, 2 * Math.PI);
+            canvasCtx.fillStyle = "#ff00ff";
+            canvasCtx.shadowColor = "#ff00ff";
+            canvasCtx.shadowBlur = 15;
+            canvasCtx.fill();
+
+            // Crosshair lines
+            canvasCtx.beginPath();
+            canvasCtx.moveTo(smoothX - 25, smoothY);
+            canvasCtx.lineTo(smoothX + 25, smoothY);
+            canvasCtx.moveTo(smoothX, smoothY - 25);
+            canvasCtx.lineTo(smoothX, smoothY + 25);
+            canvasCtx.lineWidth = 3;
+            canvasCtx.strokeStyle = "#00f3ff";
+            canvasCtx.stroke();
+
+            // Circular progress load ring
+            if (hoveredBox) {
+                let elapsed = performance.now() - hoverStartTime;
+                let progress = Math.min(elapsed / HOVER_DURATION, 1.0);
+                
+                if (progress > 0) {
+                    canvasCtx.beginPath();
+                    canvasCtx.arc(smoothX, smoothY, 35, -Math.PI/2, (-Math.PI/2) + (2 * Math.PI * progress));
+                    canvasCtx.lineWidth = 6;
+                    canvasCtx.lineCap = "round";
+                    canvasCtx.strokeStyle = "#ff00ff"; 
+                    canvasCtx.shadowColor = "#ff00ff";
+                    canvasCtx.shadowBlur = 15;
+                    canvasCtx.stroke();
+                }
+            }
+            canvasCtx.restore();
+        }
+
+        // --- Process Webcam Feed Loops ---
+        function onResults(results) {
+            try {
+                if (!isReady) {
+                    isReady = true;
+                    loadingScreen.classList.add('hidden');
+                    startScreen.classList.remove('hidden');
+                    gameState = 'START';
+                }
+
+                // Clean and draw camera context mirrored natively
+                canvasCtx.save();
+                canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                
+                // Flip camera draw only (X reversed)
+                canvasCtx.translate(canvasElement.width, 0);
+                canvasCtx.scale(-1, 1);
+                canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+                
+                pointerX = -1;
+                pointerY = -1;
+
+                // Capture hand landmarks and draw skeleton mirrored
+                if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                    for (const landmarks of results.multiHandLandmarks) {
+                        drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00f3ff', lineWidth: 4});
+                        drawLandmarks(canvasCtx, landmarks, {color: '#ff00ff', lineWidth: 1, radius: 4}); 
+                    }
+
+                    // Mirror index finger coordinates (landmark 8) natively for exact interaction matching
+                    const indexFinger = results.multiHandLandmarks[0][8];
+                    if (indexFinger) {
+                        pointerX = (1 - indexFinger.x) * canvasElement.width;
+                        pointerY = indexFinger.y * canvasElement.height;
+                    }
+                }
+                
+                // Restore drawing coordinates back to non-flipped scale
+                canvasCtx.restore(); 
+
+                // Linear Interpolation (Smoothing) & tracking lose protection
+                if (pointerX !== -1) {
+                    if (smoothX === -1) { 
+                        smoothX = pointerX;
+                        smoothY = pointerY;
+                    } else {
+                        smoothX += (pointerX - smoothX) * 0.35; 
+                        smoothY += (pointerY - smoothY) * 0.35;
+                    }
+                    hoverLossTime = 0;
+                } else {
+                    if (hoverLossTime === 0) hoverLossTime = performance.now();
+                    if (performance.now() - hoverLossTime > 500) { // Clear pointer after 0.5 sec of lost frames
+                        hoveredBox = null;
+                        smoothX = -1;
+                        smoothY = -1;
+                        hoverStartTime = 0;
+                    }
+                }
+
+                // Render gameplay elements
+                if (gameState === 'PLAYING' || gameState === 'REVEAL') {
+                    drawGameplay();
+                    if (smoothX !== -1 && gameState === 'PLAYING') {
+                        checkHover();
+                        drawPointer();
+                    }
+                }
+
+            } catch (err) {
+                console.error("Critical error inside results loop:", err);
+            }
+        }
+
+        // --- Setup MediaPipe Hand Tracking Models ---
+        const hands = new Hands({locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+        }});
+
+        hands.setOptions({
+            maxNumHands: 1,           
+            modelComplexity: 1,       
+            minDetectionConfidence: 0.65,
+            minTrackingConfidence: 0.65
+        });
+        
+        hands.onResults(onResults);
+
+        // --- Active Web Camera Initialization ---
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 1280,
+            height: 720
+        });
+
+        camera.start().catch(err => {
+            console.error("Camera fail:", err);
+            loadingScreen.innerHTML = `
+                <div class="text-pink-500 text-6xl mb-6 neon-text-magenta">⚠️ SYSTEM EXCEPTION</div>
+                <p class="text-2xl text-white">ไม่สามารถเปิดทำงานกล้องเว็บแคมได้</p>
+                <p class="text-xl text-gray-400 mt-2">กรุณาอนุญาตให้สิทธิ์การใช้กล้อง แล้วทำการโหลดหน้าเว็บนี้ใหม่อีกครั้ง</p>
+            `;
+            loadingScreen.classList.remove('hidden');
+        });
+    </script>
+</body>
+</html>
